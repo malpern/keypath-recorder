@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Keypath IR v1.0",
+  "type": "object",
+  "required": [
+    "keys"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object"
+    },
+    "keys": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "tap"
+        ],
+        "properties": {
+          "tap": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/definitions/action"
+              }
+            ]
+          },
+          "hold": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/definitions/action"
+              }
+            ]
+          },
+          "mods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "when": {
+            "type": "string"
+          },
+          "macros": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "macros": {
+      "type": "object"
+    },
+    "conditions": {
+      "type": "object"
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "action": {
+      "type": "object",
+      "properties": {
+        "layer": {
+          "type": "string"
+        },
+        "macro": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

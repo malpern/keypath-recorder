@@ -1,0 +1,45 @@
+# ---------- Meta ----------
+title       = "Keypath IR Design"
+version     = "0.1"
+status      = "draft"
+authors     = ["Micah Alpern", "GPT‑o3"]
+last_update = "2025‑07‑08"
+
+# ---------- Purpose ----------
+# Unified machine‑friendly representation of keyboard behaviour
+# that can round‑trip between:
+#   • Keypath GUI
+#   • CLI & LLM
+#   • Target back‑ends (Kanata first; KE, QMK later)
+
+# ---------- Guiding Principles ----------
+principles = [
+  "Expressive superset (cover Kanata 100%)",
+  "Declarative, key‑centric, flat + references",
+  "Round‑trippable (GUI ⇄ JSON ⇄ LLM ⇄ target)",
+  "Schema‑validated (JSON Schema, CI enforced)",
+  "Extensible without breaking old configs",
+  "Deterministic serialization (stable field order)",
+  "Postel’s Law: be liberal in what we accept, conservative in what we emit"
+]
+
+# ---------- IR Shape ----------
+[ir_shape]
+keys_table   = "keys.{physical_key}"
+macros_table = "macros.{name}"
+conds_table  = "conditions.{name}"
+
+example = '''
+{
+  "keys": {
+    "f": {
+      "tap": "f",
+      "hold": { "layer": "nav" }
+    }
+  }
+}
+'''
+
+# ---------- Validation ----------
+[validation]
+schema_file = "ir_schema.json"
