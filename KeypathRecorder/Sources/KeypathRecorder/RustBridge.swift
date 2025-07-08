@@ -155,22 +155,45 @@ class RustBridge {
         return nil
     }
     
-    /// Launch Kanata with the specified config file
-    static func launchKanata(configPath: String) -> (success: Bool, error: String?) {
+    /// Generate instructions for manually running Kanata with sudo
+    static func generateKanataInstructions(configPath: String) -> String {
         guard let kanataPath = findKanataPath() else {
-            return (false, "Kanata executable not found. Please install Kanata and ensure it's in your PATH.")
+            return """
+            Kanata not found. Please install Kanata first:
+            brew install kanata
+            
+            Then run with sudo:
+            sudo kanata "\(configPath)"
+            """
         }
         
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: kanataPath)
-        process.arguments = [configPath]
+        return """
+        To run your keyboard mapping with Kanata:
         
-        do {
-            try process.run()
-            return (true, nil)
-        } catch {
-            return (false, "Failed to launch Kanata: \(error.localizedDescription)")
+        1. Open Terminal
+        2. Run: sudo \(kanataPath) "\(configPath)"
+        3. Enter your password when prompted
+        4. Press Ctrl+C to stop Kanata when done
+        
+        Note: Kanata requires elevated privileges to access keyboard input.
+        """
+    }
+    
+    /// Check if user can run Kanata (but can't actually launch it with sudo from app)
+    static func checkKanataSetup() -> (canRun: Bool, instructions: String) {
+        guard let kanataPath = findKanataPath() else {
+            return (false, """
+            Kanata not installed. To install:
+            brew install kanata
+            """)
         }
+        
+        return (true, """
+        Kanata found at: \(kanataPath)
+        
+        ⚠️  Note: Due to macOS security, this app cannot run Kanata directly.
+        You'll need to run it manually in Terminal with sudo privileges.
+        """)
     }
     
     /// Check if Kanata is available on the system
@@ -178,8 +201,8 @@ class RustBridge {
         return findKanataPath() != nil
     }
     
-    /// Complete workflow: save files and launch Kanata
-    static func saveAndLaunchKanata(irJson: String, kanataConfig: String, directory: URL? = nil, baseName: String = "keypath") -> (kanataPath: String?, error: String?) {
+    /// Complete workflow: save files and provide instructions
+    static func saveAndPrepareKanata(irJson: String, kanataConfig: String, directory: URL? = nil, baseName: String = "keypath") -> (kanataPath: String?, instructions: String?, error: String?) {
         let (_, kanataPath, saveError): (String?, String?, String?)
         
         if let dir = directory {
@@ -189,15 +212,11 @@ class RustBridge {
         }
         
         guard let kPath = kanataPath, saveError == nil else {
-            return (nil, saveError ?? "Failed to save files")
+            return (nil, nil, saveError ?? "Failed to save files")
         }
         
-        let (success, launchError) = launchKanata(configPath: kPath)
-        if success {
-            return (kPath, nil)
-        } else {
-            return (kPath, launchError)
-        }
+        let instructions = generateKanataInstructions(configPath: kPath)
+        return (kPath, instructions, nil)
     }
 }
 

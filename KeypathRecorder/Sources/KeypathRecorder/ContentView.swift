@@ -8,6 +8,8 @@ struct ContentView: View {
     @State private var keyboardCapture = KeyboardCapture()
     @State private var saveDirectory: URL?
     @State private var showingDirectoryPicker = false
+    @State private var showingInstructions = false
+    @State private var kanataInstructions = ""
     
     var body: some View {
         VStack(spacing: 20) {
@@ -95,8 +97,8 @@ struct ContentView: View {
                 .controlSize(.large)
                 .disabled(capturedInput.isEmpty || outputSequence.isEmpty)
                 
-                Button("Save & Run") {
-                    saveAndRun()
+                Button("Save & Copy Command") {
+                    saveAndShowInstructions()
                 }
                 .controlSize(.large)
                 .disabled(capturedInput.isEmpty || outputSequence.isEmpty)
@@ -127,6 +129,21 @@ struct ContentView: View {
             case .failure(let error):
                 statusMessage = "Error selecting folder: \(error.localizedDescription)"
             }
+        }
+        .alert("Run with Kanata", isPresented: $showingInstructions) {
+            Button("Copy Command") {
+                // Extract the actual command from instructions
+                let lines = kanataInstructions.components(separatedBy: .newlines)
+                if let commandLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("2. Run: ") }) {
+                    let command = String(commandLine.dropFirst(8)) // Remove "2. Run: "
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(command, forType: .string)
+                    statusMessage = "Command copied to clipboard!"
+                }
+            }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(kanataInstructions)
         }
     }
     
@@ -211,7 +228,7 @@ struct ContentView: View {
         }
     }
     
-    private func saveAndRun() {
+    private func saveAndShowInstructions() {
         guard let inputKey = RustBridge.cleanKeyName(from: capturedInput) else {
             statusMessage = "Error: Invalid input key format"
             return
@@ -229,16 +246,10 @@ struct ContentView: View {
             return
         }
         
-        // Check if Kanata is available
-        guard RustBridge.isKanataAvailable() else {
-            statusMessage = "Error: Kanata not found. Please install Kanata first."
-            return
-        }
-        
         // Generate descriptive filename
         let baseName = "keypath_\(inputKey)_to_\(cleanOutput.replacingOccurrences(of: " ", with: "_"))"
         
-        let (kanataPath, error) = RustBridge.saveAndLaunchKanata(
+        let (kanataPath, instructions, error) = RustBridge.saveAndPrepareKanata(
             irJson: ir,
             kanataConfig: kanata,
             directory: saveDirectory,
@@ -246,18 +257,19 @@ struct ContentView: View {
         )
         
         if let error = error {
-            if let kPath = kanataPath {
-                statusMessage = "Files saved, but failed to launch: \(error)"
-                print("Kanata config saved to: \(kPath)")
-                print("To run manually: kanata \"\(kPath)\"")
-            } else {
-                statusMessage = "Error: \(error)"
-            }
-        } else if let kPath = kanataPath {
-            statusMessage = "Kanata launched! Config: \(URL(fileURLWithPath: kPath).lastPathComponent)"
-            print("Kanata launched with config: \(kPath)")
+            statusMessage = "Error: \(error)"
+        } else if let kPath = kanataPath, let instr = instructions {
+            let fileName = URL(fileURLWithPath: kPath).lastPathComponent
+            statusMessage = "Files saved! Config: \(fileName)"
+            kanataInstructions = instr
+            showingInstructions = true
+            
+            print("Files saved:")
+            print("Kanata config: \(kPath)")
+            print("\nInstructions:")
+            print(instr)
         } else {
-            statusMessage = "Error: Unknown failure"
+            statusMessage = "Error: Unknown save failure"
         }
     }
 }

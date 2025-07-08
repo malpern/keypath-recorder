@@ -438,21 +438,41 @@ final class KeypathRecorderTests: XCTestCase {
         print("Kanata available: \(isAvailable)")
     }
     
-    func testKanataLaunchWithInvalidPath() throws {
-        // Test launching with an invalid config path
-        let (success, error) = RustBridge.launchKanata(configPath: "/nonexistent/file.kbd")
+    func testKanataInstructionsGeneration() throws {
+        // Test generating instructions for a valid config
+        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory())
+        let configPath = tempDir.appendingPathComponent("test.kbd").path
         
-        // With real Kanata, this may succeed (Kanata validates the file itself)
-        // or fail depending on the Kanata version and arguments
-        // We're mainly testing that the function doesn't crash
-        print("Launch result with invalid path - Success: \(success), Error: \(error ?? "none")")
+        let instructions = RustBridge.generateKanataInstructions(configPath: configPath)
         
-        // Function should return without crashing
-        XCTAssertTrue(true) // Always pass - we're testing robustness, not specific behavior
+        XCTAssertTrue(instructions.contains("sudo"))
+        XCTAssertTrue(instructions.contains(configPath))
+        XCTAssertTrue(instructions.contains("elevated privileges"))
+        
+        print("Generated instructions:")
+        print(instructions)
     }
     
-    func testSaveAndLaunchWorkflow() throws {
-        // Test the complete save and launch workflow
+    func testKanataSetupCheck() throws {
+        // Test checking Kanata setup
+        let (canRun, instructions) = RustBridge.checkKanataSetup()
+        
+        if RustBridge.isKanataAvailable() {
+            XCTAssertTrue(canRun)
+            XCTAssertTrue(instructions.contains("Kanata found"))
+            XCTAssertTrue(instructions.contains("macOS security"))
+        } else {
+            XCTAssertFalse(canRun)
+            XCTAssertTrue(instructions.contains("not installed"))
+        }
+        
+        print("Setup check result:")
+        print("Can run: \(canRun)")
+        print("Instructions: \(instructions)")
+    }
+    
+    func testSaveAndPrepareWorkflow() throws {
+        // Test the complete save and prepare workflow
         let (irJson, kanataConfig) = RustBridge.processMapping(
             inputKey: "a",
             outputSequence: "f"
@@ -461,47 +481,30 @@ final class KeypathRecorderTests: XCTestCase {
         XCTAssertNotNil(irJson)
         XCTAssertNotNil(kanataConfig)
         
-        // This will either succeed (if Kanata is installed) or fail gracefully
-        let (kanataPath, error) = RustBridge.saveAndLaunchKanata(
+        // Test the new save and prepare function
+        let (kanataPath, instructions, error) = RustBridge.saveAndPrepareKanata(
             irJson: irJson!,
             kanataConfig: kanataConfig!,
-            baseName: "test_launch"
+            baseName: "test_prepare"
         )
         
-        // File should be saved regardless of launch success
+        // File should be saved
         XCTAssertNotNil(kanataPath)
+        XCTAssertNil(error)
+        
+        // Should get instructions
+        XCTAssertNotNil(instructions)
+        XCTAssertTrue(instructions!.contains("sudo"))
         
         // Verify file exists
         let fm = FileManager.default
         XCTAssertTrue(fm.fileExists(atPath: kanataPath!))
         
-        // If Kanata is not available, we should get an error
-        if !RustBridge.isKanataAvailable() {
-            XCTAssertNotNil(error)
-            XCTAssertTrue(error!.contains("Failed to launch Kanata"))
-        } else {
-            // If Kanata is available, launch should succeed or fail with specific error
-            print("Kanata launch result: \(error ?? "success")")
-        }
+        print("Prepare workflow result:")
+        print("Config saved to: \(kanataPath!)")
+        print("Instructions: \(instructions!)")
         
         // Clean up
         try? fm.removeItem(atPath: kanataPath!)
-    }
-    
-    func testQuickLaunchErrorHandling() throws {
-        // Test error handling with invalid data
-        let (kanataPath, _) = RustBridge.saveAndLaunchKanata(
-            irJson: "",
-            kanataConfig: "",
-            baseName: "invalid_test"
-        )
-        
-        // Should save files but may have issues with Kanata launch
-        XCTAssertNotNil(kanataPath)
-        
-        if let kPath = kanataPath {
-            // Clean up
-            try? FileManager.default.removeItem(atPath: kPath)
-        }
     }
 }
