@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "schema": "1.0"
+  },
+  "keys": {
+    "a": {
+      "tap": "a"
+    }
+  },
+  "macros": {},
+  "conditions": {}
+}

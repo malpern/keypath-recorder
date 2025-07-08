@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "schema": "1.0",
+    "description": "Example with tap/hold behavior"
+  },
+  "keys": {
+    "f": {
+      "tap": "f",
+      "hold": {
+        "layer": "nav"
+      }
+    },
+    "j": {
+      "tap": "j",
+      "hold": {
+        "layer": "nav"
+      }
+    }
+  },
+  "layers": ["nav"],
+  "macros": {},
+  "conditions": {}
+}

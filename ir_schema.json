@@ -1,86 +1,131 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Keypath IR v1.0",
+  "title": "IR",
+  "description": "The main IR structure representing a keyboard configuration",
   "type": "object",
   "required": [
     "keys"
   ],
   "properties": {
-    "meta": {
-      "type": "object"
+    "conditions": {
+      "description": "Named condition definitions",
+      "type": "object",
+      "additionalProperties": true
     },
     "keys": {
+      "description": "Physical key mappings",
       "type": "object",
       "additionalProperties": {
-        "type": "object",
-        "required": [
-          "tap"
-        ],
-        "properties": {
-          "tap": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/definitions/action"
-              }
-            ]
-          },
-          "hold": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/definitions/action"
-              }
-            ]
-          },
-          "mods": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "when": {
-            "type": "string"
-          },
-          "macros": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "additionalProperties": false
+        "$ref": "#/definitions/Key"
       }
     },
-    "macros": {
-      "type": "object"
-    },
-    "conditions": {
-      "type": "object"
-    },
     "layers": {
+      "description": "Available layers",
       "type": "array",
       "items": {
         "type": "string"
       }
+    },
+    "macros": {
+      "description": "Named macro definitions",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "meta": {
+      "description": "Optional metadata about the configuration",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
     }
   },
   "definitions": {
-    "action": {
+    "Action": {
+      "description": "An action that can be performed",
+      "anyOf": [
+        {
+          "description": "Simple key output",
+          "type": "string"
+        },
+        {
+          "description": "Complex action",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ComplexAction"
+            }
+          ]
+        }
+      ]
+    },
+    "ComplexAction": {
+      "description": "Complex action with multiple possible behaviors",
       "type": "object",
       "properties": {
         "layer": {
-          "type": "string"
+          "description": "Switch to a layer",
+          "type": [
+            "string",
+            "null"
+          ]
         },
-        "macro": {
-          "type": "string"
+        "macro_name": {
+          "description": "Execute a macro",
+          "type": [
+            "string",
+            "null"
+          ]
         }
-      },
-      "additionalProperties": false
+      }
+    },
+    "Key": {
+      "description": "Configuration for a physical key",
+      "type": "object",
+      "required": [
+        "tap"
+      ],
+      "properties": {
+        "hold": {
+          "description": "Action when key is held",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Action"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "macros": {
+          "description": "Macros associated with this key",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mods": {
+          "description": "Modifier keys that affect this mapping",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tap": {
+          "description": "Action when key is tapped",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Action"
+            }
+          ]
+        },
+        "when": {
+          "description": "Condition that must be met for this mapping",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     }
   }
 }
