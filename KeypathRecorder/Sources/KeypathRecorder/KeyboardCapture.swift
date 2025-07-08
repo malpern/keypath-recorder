@@ -89,7 +89,7 @@ class KeyboardCapture {
         isCapturing = false
     }
     
-    private func keyCodeToString(keyCode: Int64) -> String? {
+    internal func keyCodeToString(keyCode: Int64) -> String? {
         // Map common key codes to their string representations
         switch keyCode {
         case 0: return "a"

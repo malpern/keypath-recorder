@@ -6,6 +6,8 @@ struct ContentView: View {
     @State private var outputSequence = ""
     @State private var statusMessage = "Ready to record"
     @State private var keyboardCapture = KeyboardCapture()
+    @State private var saveDirectory: URL?
+    @State private var showingDirectoryPicker = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -49,6 +51,29 @@ struct ContentView: View {
             }
             .padding(.horizontal)
             
+            // Save location
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Save Location:")
+                    .font(.headline)
+                HStack {
+                    Text(saveLocationText)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Choose Folder") {
+                        showingDirectoryPicker = true
+                    }
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(6)
+            }
+            .padding(.horizontal)
+            
             // Control buttons
             HStack(spacing: 20) {
                 Button(action: startRecording) {
@@ -64,8 +89,14 @@ struct ContentView: View {
                 .controlSize(.large)
                 .disabled(capturedInput.isEmpty && outputSequence.isEmpty)
                 
-                Button("Save") {
+                Button("Save Files") {
                     saveMapping()
+                }
+                .controlSize(.large)
+                .disabled(capturedInput.isEmpty || outputSequence.isEmpty)
+                
+                Button("Save & Run") {
+                    saveAndRun()
                 }
                 .controlSize(.large)
                 .disabled(capturedInput.isEmpty || outputSequence.isEmpty)
@@ -81,6 +112,29 @@ struct ContentView: View {
                 statusMessage = "Key captured! Now type output sequence and press Return"
                 isRecording = false
             }
+        }
+        .fileImporter(
+            isPresented: $showingDirectoryPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    saveDirectory = url
+                    statusMessage = "Save location updated"
+                }
+            case .failure(let error):
+                statusMessage = "Error selecting folder: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private var saveLocationText: String {
+        if let dir = saveDirectory {
+            return dir.path
+        } else {
+            return "~/Documents (default)"
         }
     }
     
@@ -116,14 +170,94 @@ struct ContentView: View {
             outputSequence: cleanOutput
         )
         
-        if let ir = irJson, let kanata = kanataConfig {
-            print("Generated IR JSON:")
-            print(ir)
-            print("\nGenerated Kanata config:")
-            print(kanata)
-            statusMessage = "Mapping generated successfully!"
-        } else {
+        guard let ir = irJson, let kanata = kanataConfig else {
             statusMessage = "Error: Failed to generate mapping"
+            return
+        }
+        
+        // Generate descriptive filename
+        let baseName = "keypath_\(inputKey)_to_\(cleanOutput.replacingOccurrences(of: " ", with: "_"))"
+        
+        let (irPath, kanataPath, error): (String?, String?, String?)
+        
+        if let customDir = saveDirectory {
+            // Save to custom directory
+            (irPath, kanataPath, error) = RustBridge.saveFilesToDirectory(
+                irJson: ir,
+                kanataConfig: kanata,
+                directory: customDir,
+                baseName: baseName
+            )
+        } else {
+            // Save to default Documents directory
+            (irPath, kanataPath, error) = RustBridge.saveFiles(
+                irJson: ir,
+                kanataConfig: kanata,
+                baseName: baseName
+            )
+        }
+        
+        if let error = error {
+            statusMessage = "Error: \(error)"
+        } else if let kPath = kanataPath {
+            statusMessage = "Files saved! Kanata config: \(URL(fileURLWithPath: kPath).lastPathComponent)"
+            print("Files saved:")
+            print("IR JSON: \(irPath ?? "unknown")")
+            print("Kanata config: \(kPath)")
+            print("\nTo use with Kanata, run:")
+            print("kanata \"\(kPath)\"")
+        } else {
+            statusMessage = "Error: Unknown save failure"
+        }
+    }
+    
+    private func saveAndRun() {
+        guard let inputKey = RustBridge.cleanKeyName(from: capturedInput) else {
+            statusMessage = "Error: Invalid input key format"
+            return
+        }
+        
+        let cleanOutput = RustBridge.cleanOutputSequence(outputSequence)
+        
+        let (irJson, kanataConfig) = RustBridge.processMapping(
+            inputKey: inputKey,
+            outputSequence: cleanOutput
+        )
+        
+        guard let ir = irJson, let kanata = kanataConfig else {
+            statusMessage = "Error: Failed to generate mapping"
+            return
+        }
+        
+        // Check if Kanata is available
+        guard RustBridge.isKanataAvailable() else {
+            statusMessage = "Error: Kanata not found. Please install Kanata first."
+            return
+        }
+        
+        // Generate descriptive filename
+        let baseName = "keypath_\(inputKey)_to_\(cleanOutput.replacingOccurrences(of: " ", with: "_"))"
+        
+        let (kanataPath, error) = RustBridge.saveAndLaunchKanata(
+            irJson: ir,
+            kanataConfig: kanata,
+            directory: saveDirectory,
+            baseName: baseName
+        )
+        
+        if let error = error {
+            if let kPath = kanataPath {
+                statusMessage = "Files saved, but failed to launch: \(error)"
+                print("Kanata config saved to: \(kPath)")
+                print("To run manually: kanata \"\(kPath)\"")
+            } else {
+                statusMessage = "Error: \(error)"
+            }
+        } else if let kPath = kanataPath {
+            statusMessage = "Kanata launched! Config: \(URL(fileURLWithPath: kPath).lastPathComponent)"
+            print("Kanata launched with config: \(kPath)")
+        } else {
+            statusMessage = "Error: Unknown failure"
         }
     }
 }
