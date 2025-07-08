@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "schema": "1.0",
+    "description": "Example with macros and conditions"
+  },
+  "keys": {
+    "space": {
+      "tap": {
+        "macro_name": "space_macro"
+      },
+      "when": "gaming_mode"
+    },
+    "enter": {
+      "tap": "enter"
+    }
+  },
+  "macros": {
+    "space_macro": {
+      "sequence": ["spc", "spc"],
+      "delay": 50
+    }
+  },
+  "conditions": {
+    "gaming_mode": {
+      "type": "layer_active",
+      "layer": "gaming"
+    }
+  },
+  "layers": ["gaming"]
+}

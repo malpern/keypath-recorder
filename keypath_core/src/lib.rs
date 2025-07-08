@@ -3,6 +3,9 @@ pub mod ir;
 pub mod schema;
 pub mod validation;
 
+#[cfg(test)]
+mod integration_tests;
+
 pub use export::export_kanata;
 pub use ir::{Action, Key, IR};
 pub use schema::{generate_schema, validate_json_schema};
