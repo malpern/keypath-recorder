@@ -163,7 +163,7 @@ class RustBridge {
             brew install kanata
             
             Then run with sudo:
-            sudo kanata "\(configPath)"
+            sudo kanata --cfg "\(configPath)"
             """
         }
         
@@ -171,7 +171,7 @@ class RustBridge {
         To run your keyboard mapping with Kanata:
         
         1. Open Terminal
-        2. Run: sudo \(kanataPath) "\(configPath)"
+        2. Run: sudo \(kanataPath) --cfg "\(configPath)"
         3. Enter your password when prompted
         4. Press Ctrl+C to stop Kanata when done
         

@@ -10,6 +10,7 @@ class KeyboardCapture {
     
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var hasCaptured = false // Track if we've already captured a key
     
     init() {}
     
@@ -18,10 +19,11 @@ class KeyboardCapture {
     }
     
     func startCapture() {
+        Logger.shared.log("Starting keyboard capture")
         // Check for accessibility permissions
         let trusted = AXIsProcessTrusted()
         if !trusted {
-            print("App not trusted for accessibility. Requesting permission...")
+            Logger.shared.log("App not trusted for accessibility. Requesting permission...")
             let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
             AXIsProcessTrustedWithOptions(options)
             return
@@ -39,6 +41,16 @@ class KeyboardCapture {
                 // Get the capture instance from refcon
                 let capture = Unmanaged<KeyboardCapture>.fromOpaque(refcon!).takeUnretainedValue()
                 
+                // Log every event to see if callback is still being called
+                let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+                Logger.shared.log("CGEvent callback received keyCode: \(keyCode), hasCaptured: \(capture.hasCaptured), eventTap exists: \(capture.eventTap != nil)")
+                
+                // If we've already captured, let events pass through
+                if capture.hasCaptured {
+                    Logger.shared.log("Event tap still active but letting event pass through (keyCode: \(keyCode))")
+                    return Unmanaged.passRetained(event)
+                }
+                
                 if type == .keyDown {
                     // Get scan code
                     let scanCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
@@ -46,14 +58,32 @@ class KeyboardCapture {
                     // Get the key character
                     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
                     if let key = capture.keyCodeToString(keyCode: keyCode) {
+                        // Mark as captured and immediately remove from run loop
+                        capture.hasCaptured = true
+                        Logger.shared.log("Captured key '\(key)', disabling event tap immediately")
+                        
+                        // Immediately disable and remove from run loop to stop intercepting events
+                        if let eventTap = capture.eventTap {
+                            CGEvent.tapEnable(tap: eventTap, enable: false)
+                            if let runLoopSource = capture.runLoopSource {
+                                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+                            }
+                            // Completely destroy the event tap and run loop source
+                            capture.eventTap = nil
+                            capture.runLoopSource = nil
+                            Logger.shared.log("Event tap disabled, removed from run loop, and destroyed - eventTap now nil: \(capture.eventTap == nil)")
+                        }
+                        
+                        // Update captured values and finish cleanup on main thread
                         DispatchQueue.main.async {
                             capture.capturedKey = key
                             capture.capturedScanCode = scanCode
-                            capture.stopCapture()
+                            capture.isCapturing = false
+                            Logger.shared.log("Keyboard capture state updated on main thread")
                         }
                     }
                     
-                    // Consume the event (don't pass it on)
+                    // Consume this event (don't pass it on) only if we haven't captured yet
                     return nil
                 }
                 
@@ -61,7 +91,7 @@ class KeyboardCapture {
             },
             userInfo: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         ) else {
-            print("Failed to create event tap")
+            Logger.shared.log("Failed to create event tap")
             return
         }
         
@@ -75,9 +105,17 @@ class KeyboardCapture {
         CGEvent.tapEnable(tap: eventTap, enable: true)
         
         isCapturing = true
+        hasCaptured = false // Reset the capture flag
+        Logger.shared.log("Event tap created and enabled successfully")
     }
     
     func stopCapture() {
+        guard isCapturing else { 
+            Logger.shared.log("stopCapture() called but already stopped")
+            return 
+        }
+        
+        Logger.shared.log("Stopping keyboard capture")
         if let eventTap = eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             if let runLoopSource = runLoopSource {
@@ -85,6 +123,7 @@ class KeyboardCapture {
             }
             self.eventTap = nil
             self.runLoopSource = nil
+            Logger.shared.log("Event tap cleaned up in stopCapture()")
         }
         isCapturing = false
     }
