@@ -11,6 +11,9 @@ struct ContentView: View {
     @State private var showingDirectoryPicker = false
     @State private var showingInstructions = false
     @State private var kanataInstructions = ""
+    @StateObject private var helperManager = HelperManager()
+    @State private var showingHelperSettings = false
+    @State private var kanataRunning = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -85,9 +88,55 @@ struct ContentView: View {
             }
             .padding(.horizontal)
             
+            // Helper Status Section
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Privileged Helper Status:")
+                    .font(.headline)
+                HStack {
+                    Circle()
+                        .fill(helperManager.isHelperRegistered ? .green : .red)
+                        .frame(width: 8, height: 8)
+                    Text(helperStatusText)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Settings") {
+                        showingHelperSettings = true
+                    }
+                    .controlSize(.small)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(6)
+                
+                if helperManager.isHelperRegistered {
+                    HStack {
+                        Text("Kanata Status:")
+                            .font(.caption)
+                        Text(kanataRunning ? "Running" : "Stopped")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(kanataRunning ? .green : .secondary)
+                        Spacer()
+                        Button("Stop Kanata") {
+                            Task {
+                                await stopKanata()
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(!kanataRunning)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.05))
+                    .cornerRadius(6)
+                }
+            }
+            .padding(.horizontal)
+            
             // Action buttons
             VStack(spacing: 12) {
-                HStack(spacing: 20) {
+                HStack(spacing: 15) {
                     Button("Clear All") {
                         clearAll()
                     }
@@ -100,11 +149,19 @@ struct ContentView: View {
                     .controlSize(.large)
                     .disabled(capturedInput.isEmpty || outputSequence.isEmpty || isRecording)
                     
-                    Button("Save & Copy Command") {
-                        saveAndShowInstructions()
+                    if helperManager.isHelperRegistered {
+                        Button("Save & Launch") {
+                            saveAndLaunchKanata()
+                        }
+                        .controlSize(.large)
+                        .disabled(capturedInput.isEmpty || outputSequence.isEmpty || isRecording)
+                    } else {
+                        Button("Save & Copy Command") {
+                            saveAndShowInstructions()
+                        }
+                        .controlSize(.large)
+                        .disabled(capturedInput.isEmpty || outputSequence.isEmpty || isRecording)
                     }
-                    .controlSize(.large)
-                    .disabled(capturedInput.isEmpty || outputSequence.isEmpty || isRecording)
                 }
                 
                 // Debug button
@@ -182,6 +239,12 @@ struct ContentView: View {
         } message: {
             Text(kanataInstructions)
         }
+        .sheet(isPresented: $showingHelperSettings) {
+            HelperSettingsView(helperManager: helperManager)
+        }
+        .task {
+            await checkKanataStatus()
+        }
     }
     
     private var saveLocationText: String {
@@ -189,6 +252,21 @@ struct ContentView: View {
             return dir.path
         } else {
             return "~/Documents (default)"
+        }
+    }
+    
+    private var helperStatusText: String {
+        switch helperManager.status {
+        case .notRegistered:
+            return "Not registered"
+        case .enabled:
+            return "Enabled"
+        case .requiresApproval:
+            return "Requires approval"
+        case .notFound:
+            return "Not found"
+        @unknown default:
+            return "Unknown"
         }
     }
     
@@ -312,6 +390,80 @@ struct ContentView: View {
             print(instr)
         } else {
             statusMessage = "Error: Unknown save failure"
+        }
+    }
+    
+    private func saveAndLaunchKanata() {
+        guard let inputKey = RustBridge.cleanKeyName(from: capturedInput) else {
+            statusMessage = "Error: Invalid input key format"
+            return
+        }
+        
+        let cleanOutput = RustBridge.cleanOutputSequence(outputSequence)
+        
+        let (irJson, kanataConfig) = RustBridge.processMapping(
+            inputKey: inputKey,
+            outputSequence: cleanOutput
+        )
+        
+        guard let ir = irJson, let kanata = kanataConfig else {
+            statusMessage = "Error: Failed to generate mapping"
+            return
+        }
+        
+        // Generate descriptive filename
+        let baseName = "keypath_\(inputKey)_to_\(cleanOutput.replacingOccurrences(of: " ", with: "_"))"
+        
+        let (kanataPath, _, error) = RustBridge.saveAndPrepareKanata(
+            irJson: ir,
+            kanataConfig: kanata,
+            directory: saveDirectory,
+            baseName: baseName
+        )
+        
+        if let error = error {
+            statusMessage = "Error: \(error)"
+            return
+        }
+        
+        guard let kPath = kanataPath else {
+            statusMessage = "Error: Failed to save Kanata config"
+            return
+        }
+        
+        // Launch Kanata via privileged helper
+        Task {
+            do {
+                let result = try await helperManager.launchKanata(configPath: kPath)
+                statusMessage = "Kanata launched: \(result)"
+                kanataRunning = true
+            } catch {
+                statusMessage = "Error launching Kanata: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private func checkKanataStatus() async {
+        guard helperManager.isHelperRegistered else {
+            kanataRunning = false
+            return
+        }
+        
+        do {
+            let status = try await helperManager.getKanataStatus()
+            kanataRunning = status.contains("running")
+        } catch {
+            kanataRunning = false
+        }
+    }
+    
+    private func stopKanata() async {
+        do {
+            let result = try await helperManager.stopKanata()
+            statusMessage = "Kanata stopped: \(result)"
+            kanataRunning = false
+        } catch {
+            statusMessage = "Error stopping Kanata: \(error.localizedDescription)"
         }
     }
 }

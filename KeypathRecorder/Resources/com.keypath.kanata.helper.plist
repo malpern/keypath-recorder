@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.keypath.kanata.helper</string>
+    
+    <!-- Use BundleProgram for SMAppService (relative to app bundle) -->
+    <key>BundleProgram</key>
+    <string>Contents/MacOS/KanataHelper</string>
+    
+    <!-- Associate with the main KeypathRecorder app -->
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>com.keypath.KeypathRecorder</string>
+    </array>
+    
+    <!-- XPC Mach service for communication -->
+    <key>MachServices</key>
+    <dict>
+        <key>com.keypath.kanata.xpc</key>
+        <true/>
+    </dict>
+    
+    <!-- On-demand launch (don't run at startup) -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- Don't keep alive (launch on demand) -->
+    <key>KeepAlive</key>
+    <false/>
+    
+    <!-- Standard output/error (optional for debugging) -->
+    <key>StandardOutPath</key>
+    <string>/var/log/kanata-helper.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/kanata-helper.log</string>
+</dict>
+</plist>

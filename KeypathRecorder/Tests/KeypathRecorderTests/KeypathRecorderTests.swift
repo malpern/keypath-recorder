@@ -1,4 +1,5 @@
 import XCTest
+import ServiceManagement
 @testable import KeypathRecorder
 
 final class KeypathRecorderTests: XCTestCase {
@@ -13,6 +14,32 @@ final class KeypathRecorderTests: XCTestCase {
     func testInitialState() throws {
         // Will add more tests as we implement features  
         XCTAssertTrue(true)
+    }
+    
+    // MARK: - HelperManager Tests
+    
+    @MainActor
+    func testHelperManagerInitialization() throws {
+        let helperManager = HelperManager()
+        
+        // Test initial state
+        XCTAssertFalse(helperManager.isHelperRegistered)
+        // Status could be .notRegistered or .notFound depending on bundle structure
+        let validInitialStatuses: [SMAppService.Status] = [.notRegistered, .notFound]
+        XCTAssertTrue(validInitialStatuses.contains(helperManager.status))
+        XCTAssertNil(helperManager.lastError)
+    }
+    
+    @MainActor
+    func testHelperManagerStatusCheck() throws {
+        let helperManager = HelperManager()
+        
+        // Test status check doesn't crash
+        helperManager.checkStatus()
+        
+        // Status should be one of the expected values
+        let validStatuses: [SMAppService.Status] = [.notRegistered, .enabled, .requiresApproval, .notFound]
+        XCTAssertTrue(validStatuses.contains(helperManager.status))
     }
     
     // MARK: - RustBridge Utility Function Tests

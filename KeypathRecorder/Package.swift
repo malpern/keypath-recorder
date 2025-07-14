@@ -10,6 +10,10 @@ let package = Package(
         .executable(
             name: "KeypathRecorder",
             targets: ["KeypathRecorder"]
+        ),
+        .executable(
+            name: "KanataHelper",
+            targets: ["KanataHelper"]
         )
     ],
     dependencies: [],
@@ -23,6 +27,13 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("keypath_core"),
                 .unsafeFlags(["-L../target/debug"])
+            ]
+        ),
+        .executableTarget(
+            name: "KanataHelper",
+            dependencies: [],
+            swiftSettings: [
+                .enableUpcomingFeature("BareSlashRegexLiterals")
             ]
         ),
         .testTarget(
