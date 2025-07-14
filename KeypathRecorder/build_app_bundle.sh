@@ -6,6 +6,9 @@ set -e
 
 echo "Building KeypathRecorder with privileged helper..."
 
+# Code signing identity
+DEVELOPER_ID="Developer ID Application: Micah Alpern (X2RKZ5TG99)"
+
 # Build both executables
 swift build --product KeypathRecorder
 swift build --product KanataHelper
@@ -61,7 +64,49 @@ EOF
 chmod +x "$MACOS_DIR/KeypathRecorder"
 chmod +x "$MACOS_DIR/KanataHelper"
 
-echo "App bundle created at: $APP_BUNDLE"
+echo "Code signing executables and dependencies..."
+
+# Sign the Rust library first (required for linking)
+RUST_LIB_PATH="../target/debug/libkeypath_core.dylib"
+RUST_LIB_DEPS_PATH="../target/debug/deps/libkeypath_core.dylib"
+
+if [ -f "$RUST_LIB_PATH" ]; then
+    echo "Signing main Rust library..."
+    codesign --force --sign "$DEVELOPER_ID" \
+        --options runtime \
+        "$RUST_LIB_PATH"
+fi
+
+if [ -f "$RUST_LIB_DEPS_PATH" ]; then
+    echo "Signing deps Rust library..."
+    codesign --force --sign "$DEVELOPER_ID" \
+        --options runtime \
+        "$RUST_LIB_DEPS_PATH"
+fi
+
+# Sign the helper executable first (with helper entitlements)
+codesign --force --sign "$DEVELOPER_ID" \
+    --entitlements "Resources/KanataHelper.entitlements" \
+    --options runtime \
+    "$MACOS_DIR/KanataHelper"
+
+# Sign the main executable (with main app entitlements)
+codesign --force --sign "$DEVELOPER_ID" \
+    --entitlements "Resources/KeypathRecorder.entitlements" \
+    --options runtime \
+    "$MACOS_DIR/KeypathRecorder"
+
+# Sign the entire app bundle
+codesign --force --sign "$DEVELOPER_ID" \
+    --entitlements "Resources/KeypathRecorder.entitlements" \
+    --options runtime \
+    "$APP_BUNDLE"
+
+echo "Verifying code signatures..."
+codesign --verify --deep --strict "$APP_BUNDLE"
+codesign --display --verbose=2 "$APP_BUNDLE"
+
+echo "App bundle created and signed at: $APP_BUNDLE"
 echo ""
 echo "To test the privileged helper:"
 echo "1. Open $APP_BUNDLE (double-click in Finder)"
@@ -69,4 +114,4 @@ echo "2. Go to Helper Settings and register the helper"
 echo "3. Approve in System Settings > General > Login Items"
 echo "4. Test the 'Save & Launch' functionality"
 echo ""
-echo "Note: The helper requires proper code signing in production"
+echo "Note: The helper is now properly code signed for development"

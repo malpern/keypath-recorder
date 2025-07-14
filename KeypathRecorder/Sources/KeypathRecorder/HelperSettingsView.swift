@@ -8,7 +8,7 @@ struct HelperSettingsView: View {
     @State private var errorMessage: String?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 // Header
                 VStack(spacing: 8) {
@@ -119,6 +119,11 @@ struct HelperSettingsView: View {
             .padding()
             .navigationTitle("Helper Settings")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         dismiss()

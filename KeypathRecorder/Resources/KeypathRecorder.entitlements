@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required for SMAppService privileged helper -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>com.keypath.KeypathRecorder</string>
+    </array>
+    
+    <!-- Required for helper registration -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Required for keyboard input monitoring -->
+    <key>com.apple.security.device.input-monitoring</key>
+    <true/>
+    
+    <!-- Required for process spawning -->
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>com.keypath.kanata.xpc</string>
+    </array>
+    
+    <!-- Hardened runtime -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <false/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <false/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <false/>
+</dict>
+</plist>

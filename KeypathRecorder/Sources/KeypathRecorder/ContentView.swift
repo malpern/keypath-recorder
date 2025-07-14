@@ -118,13 +118,21 @@ struct ContentView: View {
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(kanataRunning ? .green : .secondary)
                         Spacer()
-                        Button("Stop Kanata") {
-                            Task {
-                                await stopKanata()
+                        if kanataRunning {
+                            Button("Stop Kanata") {
+                                Task {
+                                    await stopKanata()
+                                }
                             }
+                            .controlSize(.small)
+                        } else {
+                            Button("Start Kanata") {
+                                Task {
+                                    await startKanata()
+                                }
+                            }
+                            .controlSize(.small)
                         }
-                        .controlSize(.small)
-                        .disabled(!kanataRunning)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -162,6 +170,12 @@ struct ContentView: View {
                         .controlSize(.large)
                         .disabled(capturedInput.isEmpty || outputSequence.isEmpty || isRecording)
                     }
+                    
+                    Button("Open Config in Zed") {
+                        openConfigInZed()
+                    }
+                    .controlSize(.large)
+                    .disabled(!(kanataRunning || (!capturedInput.isEmpty && !outputSequence.isEmpty)))
                 }
                 
                 // Debug button
@@ -244,6 +258,11 @@ struct ContentView: View {
         }
         .task {
             await checkKanataStatus()
+            
+            // Auto-start Kanata if helper is registered and Kanata is not running
+            if helperManager.isHelperRegistered && !kanataRunning {
+                await autoStartKanata()
+            }
         }
     }
     
@@ -464,6 +483,113 @@ struct ContentView: View {
             kanataRunning = false
         } catch {
             statusMessage = "Error stopping Kanata: \(error.localizedDescription)"
+        }
+    }
+    
+    private func startKanata() async {
+        // Find the most recent .kbd file to use as config
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.contentModificationDateKey], options: .skipsHiddenFiles)
+            
+            // Filter for .kbd files and sort by modification date (newest first)
+            let kbdFiles = files.filter { $0.pathExtension == "kbd" }
+                .sorted { file1, file2 in
+                    let date1 = (try? file1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    let date2 = (try? file2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    return date1 > date2
+                }
+            
+            if let mostRecentFile = kbdFiles.first {
+                do {
+                    let result = try await helperManager.launchKanata(configPath: mostRecentFile.path)
+                    statusMessage = "Kanata started: \(result)"
+                    kanataRunning = true
+                } catch {
+                    statusMessage = "Error starting Kanata: \(error.localizedDescription)"
+                }
+            } else {
+                statusMessage = "No Kanata config files found. Create a mapping first."
+            }
+        } catch {
+            statusMessage = "Error finding config files: \(error.localizedDescription)"
+        }
+    }
+    
+    private func autoStartKanata() async {
+        // Find the most recent .kbd file to use as config
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.contentModificationDateKey], options: .skipsHiddenFiles)
+            
+            // Filter for .kbd files and sort by modification date (newest first)
+            let kbdFiles = files.filter { $0.pathExtension == "kbd" }
+                .sorted { file1, file2 in
+                    let date1 = (try? file1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    let date2 = (try? file2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    return date1 > date2
+                }
+            
+            if let mostRecentFile = kbdFiles.first {
+                do {
+                    let result = try await helperManager.launchKanata(configPath: mostRecentFile.path)
+                    statusMessage = "Kanata auto-started with: \(mostRecentFile.lastPathComponent)"
+                    kanataRunning = true
+                    Logger.shared.log("Auto-started Kanata with config: \(mostRecentFile.path)")
+                } catch {
+                    statusMessage = "Ready to record (Kanata auto-start failed: \(error.localizedDescription))"
+                    Logger.shared.log("Auto-start failed: \(error)")
+                }
+            } else {
+                statusMessage = "Ready to record (No Kanata config files found)"
+                Logger.shared.log("Auto-start skipped: No .kbd files found")
+            }
+        } catch {
+            statusMessage = "Ready to record (Error finding config files: \(error.localizedDescription))"
+            Logger.shared.log("Auto-start error: \(error)")
+        }
+    }
+    
+    private func openConfigInZed() {
+        // Find the most recent .kbd file in Documents folder
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.contentModificationDateKey], options: .skipsHiddenFiles)
+            
+            // Filter for .kbd files and sort by modification date (newest first)
+            let kbdFiles = files.filter { $0.pathExtension == "kbd" }
+                .sorted { file1, file2 in
+                    let date1 = (try? file1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    let date2 = (try? file2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
+                    return date1 > date2
+                }
+            
+            if let mostRecentFile = kbdFiles.first {
+                // Try to open with Zed
+                let task = Process()
+                task.launchPath = "/usr/bin/open"
+                task.arguments = ["-a", "Zed", mostRecentFile.path]
+                
+                do {
+                    try task.run()
+                    statusMessage = "Opened config file in Zed: \(mostRecentFile.lastPathComponent)"
+                    Logger.shared.log("Opened config file in Zed: \(mostRecentFile.path)")
+                } catch {
+                    // Fallback to default app if Zed is not available
+                    NSWorkspace.shared.open(mostRecentFile)
+                    statusMessage = "Opened config file: \(mostRecentFile.lastPathComponent)"
+                    Logger.shared.log("Opened config file with default app: \(mostRecentFile.path)")
+                }
+            } else {
+                statusMessage = "No .kbd config files found in Documents folder"
+                Logger.shared.log("No .kbd files found in Documents folder")
+            }
+        } catch {
+            statusMessage = "Error finding config files: \(error.localizedDescription)"
+            Logger.shared.log("Error finding config files: \(error)")
         }
     }
 }
